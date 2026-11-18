@@ -1,22 +1,24 @@
-# Bông iu
+# Bông iu — bản cập nhật cục bộ
 
-Ứng dụng quản lý cuộc sống và tài chính cá nhân bằng tiếng Việt. Giao diện tĩnh không cần bước build; chạy `index.html` qua một máy chủ HTTP để xem thử.
+Đây là bản sửa của website Bông iu hiện có, **không ghi vào ổ E** và không tự đẩy GitHub hoặc triển khai Vercel. Các file HTML/CSS/JS chạy trực tiếp trên Vercel, không cần bước build.
 
-## Bản cập nhật lịch dạy
+## Lưu dữ liệu
 
-`improvements.js` bổ sung trang **Lịch dạy** cho Long, Quyên và Trúc. Chọn ngày linh hoạt, nhập nhanh `Dạy Long`, `Dạy Quyên` hoặc `Dạy Trúc` để tạo một buổi; buổi dạy cũng xuất hiện trên lịch. Mỗi học sinh có số buổi chưa nhận lương riêng. Khi nhập số tiền và chọn **Đã nhận lương**, các buổi chưa thanh toán được chốt, bộ đếm trở về 0, lịch sử vẫn giữ lại và khoản tiền được ghi là thu nhập.
+- Dữ liệu nghiệp vụ lưu trong IndexedDB bằng Dexie. Khi mở bản mới lần đầu trên **cùng URL và trình duyệt**, dữ liệu cũ trong localStorage được chuyển vào IndexedDB một lần.
+- Nút **Sao lưu** tải JSON về máy. **Khôi phục** cho xem số lượng bản ghi trước khi thay dữ liệu hiện tại.
+- Xóa dữ liệu trang web, dùng cửa sổ riêng tư hoặc đổi trình duyệt có thể làm mất dữ liệu cục bộ. Nên sao lưu thường xuyên.
+- `dexie.min.js` được phân phối cùng giấy phép trong `DEXIE-LICENSE.txt`.
 
-Bản cập nhật cũng thêm danh sách To-do riêng, lọc việc, báo cáo thu chi theo tháng, ngân sách theo tháng, trạng thái chi phí cố định, hoàn tác xóa trong thời gian ngắn và nút xuất/nhập sao lưu JSON. Dữ liệu cũ trong trình duyệt được đọc tiếp khi cập nhật file.
+## Lịch dạy và lương
 
-## Cấu hình đồng bộ
+Long, Quyên, Trúc có đơn giá riêng. Gõ “Dạy Long”, “Dạy Quyên” hoặc “Dạy Trúc”, chọn ngày linh hoạt rồi thêm lịch. Buổi mới là **Đã lên lịch** và chưa tính tiền. Khi thực sự dạy xong, bấm **Đã dạy**; đơn giá lúc đó được giữ riêng trong buổi học. Buổi hủy/hoãn không tính lương.
 
-1. Tạo dự án Supabase và chạy `schema.sql` trong SQL Editor.
-2. Điền Project URL và publishable/anon key vào `config.js`. Không dùng service-role key trong trình duyệt.
-3. Bật Email authentication trong Supabase. Ứng dụng dùng email/password và dữ liệu riêng từng tài khoản theo RLS.
-4. Deploy thư mục này lên Vercel dưới dạng static site. `vercel.json` đã cấu hình.
+Nhập số tiền thực nhận để ghi lương, kể cả khi chỉ nhận một phần. Tiền được phân bổ vào các buổi chưa thanh toán theo thứ tự ngày dạy; phần còn phải thu vẫn hiển thị. Khoản tiền nhận được ghi một lần vào Thu chi. Hủy phiếu lương sẽ đảo phần phân bổ và xóa khoản Thu liên quan, không xóa lịch sử buổi dạy.
 
-Khi chưa cấu hình Supabase, ứng dụng chạy chế độ dùng thử trên thiết bị, lưu bằng localStorage. Màn hình hiển thị rõ chế độ này. Dùng **Sao lưu** thường xuyên để tải bản JSON về máy; **Khôi phục** sẽ thay toàn bộ dữ liệu hiện tại. Không có đồng bộ nhiều thiết bị trong chế độ dùng thử.
+## Cập nhật trên GitHub
 
-## Các luồng chính
+Giải nén gói cập nhật rồi tải các file ở thư mục gốc lên repository `bongiu`: `app.js`, `improvements.js`, `index.html`, `storage.js`, `dexie.min.js`, `DEXIE-LICENSE.txt`, `README.md`. Giữ nguyên `styles.css` và các dữ liệu đã nhập trên website. Sau khi Vercel tự triển khai, kiểm tra một buổi lên lịch không được cộng lương, đánh dấu **Đã dạy** mới cộng, và thử sao lưu.
 
-Lịch và việc cần làm dùng cùng một bản ghi. Thu chi tự cập nhật ngân sách và báo cáo. Chuyển tiền vào hũ tiết kiệm và khoản vay được theo dõi riêng, không tính thành chi tiêu sinh hoạt. Các khoản bắt buộc được tính riêng để tránh trừ hai lần. Dữ liệu được lưu sau mỗi thay đổi; ở chế độ Supabase, tab đang mở kiểm tra bản cập nhật từ thiết bị khác định kỳ.
+## Giới hạn hiện tại
+
+Đây là bản sửa của ứng dụng HTML/JS hiện có, chưa phải bản React/TypeScript với 6 menu và toàn bộ các module trong tài liệu Bông iu 2.0. Chưa có tài khoản đăng nhập hoặc đồng bộ giữa thiết bị. Các file `config.js` và `schema.sql` từ bản cũ không còn được website sử dụng.

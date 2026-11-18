@@ -8,6 +8,7 @@ schema.teaching=[
   ['student','Học sinh','select',['Long','Quyên','Trúc']],
   ['date','Ngày dạy','date'],
   ['time','Giờ dạy','time'],
+  ['status','Trạng thái','select',['Đã lên lịch','Đã dạy','Đã hủy','Hoãn']],
   ['note','Ghi chú','textarea']
 ];
 schema.items.splice(3,0,['priority','Ưu tiên','select',['Vừa','Cao','Thấp']]);
@@ -16,6 +17,12 @@ schema.transactions.splice(4,0,['wallet','Ví / tài khoản','select',['Tiền 
 
 function normalizeData(){
   data.teaching ||= [];
+  data.students ||= {Long:{rate:0,aliases:[]},Quyên:{rate:0,aliases:[]},Trúc:{rate:0,aliases:[]}};
+  data.teachingPayments ||= [];
+  for(const lesson of data.teaching){
+    if(!lesson.status)lesson.status='Đã dạy'; // dữ liệu cũ đã được tính là buổi dạy
+    if(lesson.rate===undefined)lesson.rate=0;
+  }
   data.settings ||= {};
   data.settings.monthlyBudgets ||= {};
   data.settings.categories ||= {Thu:['Lương','Lương dạy','Thưởng','Khác'],Chi:[...categories]};
@@ -34,8 +41,13 @@ const originalBudgets=budgets, originalGeneric=generic;
 let txMonth=month(),txType='Tất cả',todoFilter='Chưa xong',budgetMonth=month(),lastRemoved=null;
 const dateVN=d=>d?new Date(d+'T12:00:00').toLocaleDateString('vi-VN'):'Không hạn';
 const teachingStudents=['Long','Quyên','Trúc'];
-const unpaidLessons=s=>data.teaching.filter(x=>x.student===s&&!x.paid);
-const countLessons=s=>data.teaching.filter(x=>x.student===s).length;
+const paidForLesson=x=>{
+  const allocations=(data.teachingPayments||[]).flatMap(p=>p.voided?[]:(p.allocations||[])).filter(a=>a.lessonId===x.id);
+  return x.paid&&!allocations.length?(Number(x.rate)||0):allocations.reduce((n,a)=>n+a.amount,0);
+};
+const remainingForLesson=x=>Math.max(0,(Number(x.rate)||0)-paidForLesson(x));
+const unpaidLessons=s=>data.teaching.filter(x=>x.student===s&&x.status==='Đã dạy'&&remainingForLesson(x)>0);
+const countLessons=s=>data.teaching.filter(x=>x.student===s&&x.status==='Đã dạy').length;
 const budgetFor=m=>Number(data.settings.monthlyBudgets[m]??(m===month()?data.settings.monthlyBudget:0))||0;
 const billSpent=(m=month())=>sum(data.transactions.filter(x=>x.type==='Chi'&&x.billId&&x.date?.slice(0,7)===m));
 const flexibleSpent=(m=month())=>sum(data.transactions.filter(x=>x.type==='Chi'&&!x.billId&&x.date?.slice(0,7)===m));
@@ -112,13 +124,16 @@ calendar=function(){
 function teachingPage(){
   const cards=teachingStudents.map(s=>{
     const unpaid=unpaidLessons(s);
-    const last=data.teaching.filter(x=>x.student===s).sort((a,b)=>b.date.localeCompare(a.date))[0];
-    return `<div class="card"><span class="eyebrow">HỌC SINH</span><h2>${s}</h2><div class="mini-grid"><div class="mini">Chưa trả lương<strong>${unpaid.length} buổi</strong></div><div class="mini">Tổng đã dạy<strong>${countLessons(s)} buổi</strong></div><div class="mini">Buổi gần nhất<strong style="font-size:14px">${dateVN(last?.date)}</strong></div></div><p class="muted">Khi nhận lương, ${unpaid.length} buổi chưa thanh toán sẽ được chốt; lịch sử vẫn giữ lại.</p><label class="field" style="margin-bottom:10px">Số tiền thực nhận (₫)<input id="salary-${s}" type="number" min="1" placeholder="Nhập tiền lương"></label><button class="btn primary" data-action="salary:${s}" ${!unpaid.length?'disabled':''}>Đã nhận lương ${s}</button></div>`;
+    const last=data.teaching.filter(x=>x.student===s&&x.status==='Đã dạy').sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const due=unpaid.reduce((n,x)=>n+remainingForLesson(x),0);
+    const rate=Number(data.students[s]?.rate)||0;
+    return `<div class="card"><span class="eyebrow">HỌC SINH</span><h2>${s}</h2><div class="mini-grid"><div class="mini">Buổi chưa thanh toán<strong>${unpaid.length}</strong></div><div class="mini">Tiền còn phải thu<strong>${money(due)}</strong></div><div class="mini">Đã dạy tất cả<strong>${countLessons(s)}</strong></div></div><p class="muted">Dạy gần nhất: ${dateVN(last?.date)}. Chỉ buổi đã đánh dấu “Đã dạy” mới tính lương.</p><label class="field">Đơn giá mỗi buổi (₫)<input id="rate-${s}" type="number" min="0" value="${rate}"></label><button class="btn small" data-action="saverate:${s}" style="margin:8px 0 12px">Lưu đơn giá</button><div class="form-grid"><label class="field">Số tiền thực nhận (₫)<input id="salary-${s}" type="number" min="1" max="${due}" placeholder="Nhập tiền lương"></label><label class="field">Ngày nhận<input id="salary-date-${s}" type="date" value="${today()}"></label><label class="field">Nhận vào<select id="salary-wallet-${s}">${data.settings.wallets.map(w=>`<option>${esc(w)}</option>`).join('')}</select></label></div><button class="btn primary" data-action="salary:${s}" style="margin-top:12px" ${due<=0?'disabled':''}>Nhận lương ${s}</button></div>`;
   }).join('');
   const lessons=[...data.teaching].sort((a,b)=>b.date.localeCompare(a.date));
+  const payments=[...data.teachingPayments].reverse();
   return pageHead('Ngày dạy linh hoạt: tự thêm buổi và hệ thống đếm riêng cho Long, Quyên, Trúc.')+
-    `<section class="card"><h2>Thêm nhanh buổi dạy</h2><div class="toolbar"><input id="quickLesson" placeholder="Ví dụ: Dạy Long" aria-label="Tên buổi dạy"><input id="quickDate" type="date" value="${today()}" aria-label="Ngày dạy"><input id="quickTime" type="time" aria-label="Giờ dạy"><button class="btn primary" data-action="quicklesson">Thêm buổi</button></div><p class="muted">Gõ “Dạy Long”, “Dạy Quyên” hoặc “Dạy Trúc”, không phân biệt chữ hoa và chữ thường.</p></section>`+
-    `<div class="grid" style="margin-top:18px">${cards}</div><section class="card" style="margin-top:18px"><h2>Lịch sử buổi dạy</h2>${lessons.length?lessons.map(x=>`<div class="row"><span class="grow"><strong>Dạy ${esc(x.student)}</strong><small>${dateVN(x.date)} ${esc(x.time||'')} · ${x.paid?'Đã chốt lương':'Chưa nhận lương'}</small></span><button class="btn small" data-lesson-edit="${x.id}">Sửa</button><button class="btn small danger" data-lesson-delete="${x.id}">Xóa</button></div>`).join(''):empty('Chưa có buổi dạy nào 📚')}</section>`;
+    `<section class="card"><h2>Thêm nhanh buổi dạy</h2><div class="toolbar"><input id="quickLesson" placeholder="Ví dụ: Dạy Long" aria-label="Tên buổi dạy"><input id="quickDate" type="date" value="${today()}" aria-label="Ngày dạy"><input id="quickTime" type="time" aria-label="Giờ dạy"><button class="btn primary" data-action="quicklesson">Thêm lịch</button></div><p class="muted">Buổi mới ở trạng thái “Đã lên lịch”. Sau khi dạy xong, bấm “Đã dạy” để tính lương.</p></section>`+
+    `<div class="grid" style="margin-top:18px">${cards}</div><section class="card" style="margin-top:18px"><h2>Buổi dạy</h2>${lessons.length?lessons.map(x=>`<div class="row"><span class="grow"><strong>Dạy ${esc(x.student)}</strong><small>${dateVN(x.date)} ${esc(x.time||'')} · ${esc(x.status)}${x.status==='Đã dạy'?` · ${money(x.rate)} · Còn ${money(remainingForLesson(x))}`:''}</small></span>${x.status!=='Đã dạy'?`<button class="btn small" data-action="taught:${x.id}">Đã dạy</button>`:''}<button class="btn small" data-lesson-edit="${x.id}">Sửa</button><button class="btn small danger" data-lesson-delete="${x.id}">Xóa</button></div>`).join(''):empty('Chưa có buổi dạy nào 📚')}</section><section class="card" style="margin-top:18px"><h2>Lịch sử nhận lương</h2>${payments.length?payments.map(p=>`<div class="row"><span class="grow"><strong>${esc(p.student)} · ${money(p.amount)}</strong><small>${dateVN(p.date)} · ${p.voided?'Đã hủy':'Đã nhận'}</small></span>${!p.voided?`<button class="btn small danger" data-action="voidsalary:${p.id}">Hủy phiếu</button>`:''}</div>`).join(''):empty('Chưa có lần nhận lương nào')}</section>`;
 }
 
 function transactionsPage(){
@@ -185,11 +200,11 @@ openModal=function(key=page,record=null){
   originalOpenModal(key,record);
 };
 
-function addLesson(student,date,time='',note=''){
-  const lesson={id:id(),student,date,time,note,paid:false};
+function addLesson(student,date,time='',note='',status='Đã lên lịch'){
+  const lesson={id:id(),student,date,time,note,status,rate:status==='Đã dạy'?Number(data.students[student]?.rate)||0:0};
   data.teaching.push(lesson);
   data.items.push({id:id(),title:`Dạy ${student}`,date,time,kind:'Lịch dạy',note,teachingId:lesson.id,doneDates:[]});
-  save();toast(`Đã thêm buổi dạy ${student}. Còn ${unpaidLessons(student).length} buổi chưa nhận lương.`);
+  save();toast(`Đã thêm lịch dạy ${student}.`);
 }
 function toast(message,undo=false){
   $('#appToast')?.remove();
@@ -207,14 +222,48 @@ action=function(a){
     addLesson(student,date,$('#quickTime')?.value||'');return;
   }
   if(name==='salary'){
-    const lessons=unpaidLessons(value);
+    const lessons=unpaidLessons(value).sort((a,b)=>a.date.localeCompare(b.date));
     if(!lessons.length)return;
     const amount=Number(document.getElementById(`salary-${value}`)?.value);
     if(!Number.isFinite(amount)||amount<=0)return alert('Vui lòng nhập số tiền lớn hơn 0.');
+    const due=lessons.reduce((n,x)=>n+remainingForLesson(x),0);
+    if(amount>due)return alert(`Số tiền vượt khoản còn phải thu ${money(due)}.`);
     const paymentId=id();
-    lessons.forEach(x=>{x.paid=true;x.paymentId=paymentId});
-    data.transactions.push({id:paymentId,title:`Lương dạy ${value} (${lessons.length} buổi)`,type:'Thu',amount,category:'Lương dạy',wallet:'Ngân hàng',date:today(),student:value,lessonIds:lessons.map(x=>x.id)});
-    save();toast(`Đã nhận lương ${value}; bộ đếm chưa thanh toán về 0.`);return;
+    let left=amount;
+    const allocations=[];
+    for(const lesson of lessons){
+      const paid=Math.min(left,remainingForLesson(lesson));
+      if(paid>0)allocations.push({lessonId:lesson.id,amount:paid});
+      left-=paid;if(left<=0)break;
+    }
+    const receivedDate=document.getElementById(`salary-date-${value}`)?.value||today();
+    const wallet=document.getElementById(`salary-wallet-${value}`)?.value||'Tiền mặt';
+    data.teachingPayments.push({id:paymentId,student:value,date:receivedDate,wallet,amount,allocations,voided:false});
+    data.transactions.push({id:paymentId,title:`Lương dạy ${value}`,type:'Thu',amount,category:'Lương dạy',wallet,date:receivedDate,student:value,paymentId});
+    save();toast(`Đã ghi nhận ${money(amount)}; còn phải thu ${money(due-amount)}.`);return;
+  }
+  if(name==='saverate'){
+    const rate=Number(document.getElementById(`rate-${value}`)?.value);
+    if(!Number.isInteger(rate)||rate<0)return alert('Đơn giá phải là số nguyên không âm.');
+    data.students[value].rate=rate;
+    // Bản cũ chưa lưu đơn giá từng buổi: chỉ bổ sung cho các buổi đó.
+    data.teaching.filter(x=>x.student===value&&x.status==='Đã dạy'&&x.rate===0&&!x.paid).forEach(x=>x.rate=rate);
+    save();toast(`Đã lưu đơn giá của ${value}.`);return;
+  }
+  if(name==='taught'){
+    const lesson=data.teaching.find(x=>x.id===value);if(!lesson)return;
+    if(lesson.status==='Đã dạy')return;
+    const rate=Number(data.students[lesson.student]?.rate)||0;
+    if(rate<=0)return alert(`Hãy nhập đơn giá cho ${lesson.student} trước khi xác nhận đã dạy.`);
+    lesson.status='Đã dạy';lesson.rate=rate;
+    save();toast('Đã xác nhận buổi dạy.');return;
+  }
+  if(name==='voidsalary'){
+    const payment=data.teachingPayments.find(x=>x.id===value);if(!payment||payment.voided)return;
+    if(!confirm(`Hủy phiếu nhận lương ${money(payment.amount)}? Giao dịch Thu liên quan cũng sẽ được xóa.`))return;
+    payment.voided=true;
+    data.transactions=data.transactions.filter(x=>x.id!==payment.id);
+    save();toast('Đã hủy phiếu lương và đảo khoản Thu.');return;
   }
   if(name==='paybill'){
     const x=data.bills.find(v=>v.id===value);if(!x)return;
@@ -271,7 +320,13 @@ document.addEventListener('click',e=>{
   const f=e.target.closest('[data-todo-filter]');if(f){todoFilter=f.dataset.todoFilter;render();return}
   const le=e.target.closest('[data-lesson-edit]');if(le){const x=data.teaching.find(x=>x.id===le.dataset.lessonEdit);if(x)openModal('teaching',x);return}
   const m=e.target.closest('[data-move]');if(m){const x=data.items.find(x=>x.id===m.dataset.move);if(!x)return;const d=prompt('Ngày mới (YYYY-MM-DD):',x.date||today());if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d)){x.date=d;save();toast('Đã dời việc.')}return}
-  const l=e.target.closest('[data-lesson-delete]');if(l){if(!confirm('Xóa buổi dạy này?'))return;const rid=l.dataset.lessonDelete;data.teaching=data.teaching.filter(x=>x.id!==rid);data.items=data.items.filter(x=>x.teachingId!==rid);save();toast('Đã xóa buổi dạy.');return}
+  const l=e.target.closest('[data-lesson-delete]');if(l){
+    const rid=l.dataset.lessonDelete,lesson=data.teaching.find(x=>x.id===rid);
+    if(!lesson)return;
+    if(lesson.paid||paidForLesson(lesson)>0)return alert('Buổi này đã liên quan đến lương. Hãy hủy phiếu nhận lương trước khi xóa.');
+    if(!confirm('Xóa buổi dạy này?'))return;
+    data.teaching=data.teaching.filter(x=>x.id!==rid);data.items=data.items.filter(x=>x.teachingId!==rid);save();toast('Đã xóa buổi dạy.');return
+  }
 },true);
 
 document.addEventListener('click',e=>{
@@ -298,7 +353,8 @@ document.addEventListener('change',e=>{
     reader.onload=()=>{try{
       const obj=JSON.parse(reader.result);
       if(obj.format!=='bong-iu-backup'||!obj.data||!Array.isArray(obj.data.transactions))throw Error('File không đúng định dạng sao lưu Bông iu.');
-      if(!confirm('Khôi phục sẽ thay toàn bộ dữ liệu hiện tại. Bạn muốn tiếp tục?'))return;
+      const counts=`${obj.data.transactions.length} giao dịch, ${(obj.data.items||[]).length} mục lịch, ${(obj.data.teaching||[]).length} buổi dạy`;
+      if(!confirm(`Bản sao lưu chứa ${counts}. Khôi phục sẽ thay toàn bộ dữ liệu hiện tại. Bạn muốn tiếp tục?`))return;
       data=obj.data;normalizeData();save();toast('Đã khôi phục dữ liệu.');
     }catch(err){alert(err.message)}finally{e.target.value=''}};
     reader.readAsText(e.target.files[0]);
@@ -312,11 +368,21 @@ document.addEventListener('submit',e=>{
   if(!v.date)return alert('Hãy chọn ngày dạy.');
   if(f.dataset.id){
     const x=data.teaching.find(x=>x.id===f.dataset.id);if(!x)return;
+    if(x.student!==v.student&&(x.paid||paidForLesson(x)>0))return alert('Buổi đã liên quan đến lương. Hãy hủy phiếu trước khi đổi học sinh.');
+    if(x.status==='Đã dạy'&&v.status!=='Đã dạy'&&paidForLesson(x)>0)return alert('Buổi đã nhận lương. Hãy hủy phiếu lương trước khi đổi trạng thái.');
+    if(v.status==='Đã dạy'&&x.status!=='Đã dạy'){
+      const rate=Number(data.students[v.student]?.rate)||0;
+      if(rate<=0)return alert(`Hãy đặt đơn giá cho ${v.student} trước khi xác nhận đã dạy.`);
+      x.rate=rate;
+    }
     Object.assign(x,v);
     const cal=data.items.find(i=>i.teachingId===x.id);
     if(cal)Object.assign(cal,{title:`Dạy ${v.student}`,date:v.date,time:v.time,note:v.note});
     save();toast('Đã sửa buổi dạy.');
-  }else addLesson(v.student,v.date,v.time,v.note);
+  }else{
+    if(v.status==='Đã dạy'&&!(Number(data.students[v.student]?.rate)>0))return alert(`Hãy đặt đơn giá cho ${v.student} trước khi xác nhận đã dạy.`);
+    addLesson(v.student,v.date,v.time,v.note,v.status);
+  }
   $('#modal')?.remove();
 },true);
 
