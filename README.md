@@ -2,6 +2,8 @@
 
 Đây là bản sửa của website Bông iu hiện có, **không ghi vào ổ E** và không tự đẩy GitHub hoặc triển khai Vercel. Các file HTML/CSS/JS chạy trực tiếp trên Vercel, không cần bước build.
 
+Menu chính đã được gom còn đúng 6 mục: Tổng quan, Kế hoạch, Tài chính, Lịch dạy & Lương, Mục tiêu, Báo cáo. Lịch/To-do/Ghi chú, các chức năng tài chính và Wishlist nằm trong tab của mục tương ứng. Mỗi tab có địa chỉ `#...` riêng để tải lại hoặc quay lại bằng nút Back của trình duyệt.
+
 ## Lưu dữ liệu
 
 - Dữ liệu nghiệp vụ lưu trong IndexedDB bằng Dexie. Khi mở bản mới lần đầu trên **cùng URL và trình duyệt**, dữ liệu cũ trong localStorage được chuyển vào IndexedDB một lần.
@@ -17,8 +19,8 @@ Nhập số tiền thực nhận để ghi lương, kể cả khi chỉ nhận m
 
 ## Cập nhật trên GitHub
 
-Giải nén gói cập nhật rồi tải các file ở thư mục gốc lên repository `bongiu`: `app.js`, `improvements.js`, `index.html`, `storage.js`, `dexie.min.js`, `DEXIE-LICENSE.txt`, `README.md`. Giữ nguyên `styles.css` và các dữ liệu đã nhập trên website. Sau khi Vercel tự triển khai, kiểm tra một buổi lên lịch không được cộng lương, đánh dấu **Đã dạy** mới cộng, và thử sao lưu.
+Giải nén gói cập nhật rồi tải các file ở thư mục gốc lên repository `bongiu`: `app.js`, `improvements.js`, `index.html`, `storage.js`, `dexie.min.js`, `DEXIE-LICENSE.txt`, `styles.css`, `README.md`. Giữ nguyên các dữ liệu đã nhập trên website. Sau khi Vercel tự triển khai, kiểm tra menu 6 mục, một buổi lên lịch không được cộng lương, đánh dấu **Đã dạy** mới cộng, và thử sao lưu.
 
 ## Giới hạn hiện tại
 
-Đây là bản sửa của ứng dụng HTML/JS hiện có, chưa phải bản React/TypeScript với 6 menu và toàn bộ các module trong tài liệu Bông iu 2.0. Chưa có tài khoản đăng nhập hoặc đồng bộ giữa thiết bị. Các file `config.js` và `schema.sql` từ bản cũ không còn được website sử dụng.
+Đây là bản sửa của ứng dụng HTML/JS hiện có, chưa phải bản React/TypeScript hoặc toàn bộ các module trong tài liệu Bông iu 2.0. Chưa có tài khoản đăng nhập hoặc đồng bộ giữa thiết bị. Các file `config.js` và `schema.sql` từ bản cũ không còn được website sử dụng.

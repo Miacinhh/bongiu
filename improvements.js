@@ -1,9 +1,25 @@
 /* Bông iu: calendar, teaching and finance improvements. All data stays in the
    same user payload so existing browser records remain readable. */
-nav.splice(2,0,['todos','☑️','To-do']);
-nav.splice(nav.length-1,0,['teaching','📚','Lịch dạy']);
+nav.splice(0,nav.length,
+  ['dashboard','🏠','Tổng quan'],
+  ['calendar','🗓️','Kế hoạch'],
+  ['transactions','💳','Tài chính'],
+  ['teaching','📚','Lịch dạy & Lương'],
+  ['goals','🎯','Mục tiêu'],
+  ['reports','📈','Báo cáo']
+);
 titles.todos='To-do';
 titles.teaching='Lịch dạy';
+const sections={
+  dashboard:['dashboard'],
+  calendar:['calendar','todos','notes'],
+  transactions:['transactions','budgets','bills','jars','debts'],
+  teaching:['teaching'],
+  goals:['goals','wishes'],
+  reports:['reports']
+};
+const tabLabels={calendar:'Lịch',todos:'To-do',notes:'Ghi chú',transactions:'Thu chi',budgets:'Ngân sách',bills:'Chi phí cố định',jars:'Hũ tiết kiệm',debts:'Sổ nợ',goals:'Mục tiêu',wishes:'Bông muốn mua'};
+const sectionFor=p=>Object.keys(sections).find(k=>sections[k].includes(p))||'dashboard';
 schema.teaching=[
   ['student','Học sinh','select',['Long','Quyên','Trúc']],
   ['date','Ngày dạy','date'],
@@ -65,6 +81,17 @@ render=function(){
   else if(page==='bills') shell(billsPage());
   else originalRender();
   if(!$('#app .layout'))return;
+  const section=sectionFor(page);
+  document.querySelectorAll('.sidebar [data-page],.mobile-nav [data-page]').forEach(button=>{
+    const active=button.dataset.page===section;
+    button.classList.toggle('active',active);
+    if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+  });
+  const tabs=sections[section];
+  if(tabs.length>1){
+    const strip=`<nav class="subnav" aria-label="Mục trong ${esc(nav.find(n=>n[0]===section)?.[2]||'')}">${tabs.map(key=>`<button class="${page===key?'selected':''}" data-page="${key}" ${page===key?'aria-current="page"':''}>${esc(tabLabels[key]||titles[key])}</button>`).join('')}</nav>`;
+    ($('.main .notice')||$('.main .topbar')).insertAdjacentHTML('afterend',strip);
+  }
   const top=$('.top-actions');
   if(top){top.insertAdjacentHTML('afterbegin',`<button class="btn small" data-action="export" title="Tải bản sao dữ liệu">↓ Sao lưu</button><button class="btn small" data-action="import" title="Khôi phục từ bản sao">↑ Khôi phục</button>`)}
   if(!$('#backupFile'))document.body.insertAdjacentHTML('beforeend','<input id="backupFile" type="file" accept="application/json,.json" hidden>');
@@ -385,5 +412,21 @@ document.addEventListener('submit',e=>{
   }
   $('#modal')?.remove();
 },true);
+
+const validPages=Object.values(sections).flat();
+const requestedPage=decodeURIComponent(location.hash.slice(1));
+if(validPages.includes(requestedPage))page=requestedPage;
+document.addEventListener('click',e=>{
+  const link=e.target.closest('[data-page]');
+  if(!link||!validPages.includes(link.dataset.page))return;
+  e.preventDefault();e.stopImmediatePropagation();
+  page=link.dataset.page;search='';
+  history.pushState(null,'','#'+page);
+  render();
+},true);
+window.addEventListener('popstate',()=>{
+  const next=decodeURIComponent(location.hash.slice(1));
+  page=validPages.includes(next)?next:'dashboard';render();
+});
 
 render();
